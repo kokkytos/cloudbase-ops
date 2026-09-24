@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{ 'Check-In Saved' if flow == 'checkin' else 'Check-Out Saved' }}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --ink: #1C2B2D;
+    --paper: #F7F5F0;
+    --line: #D8D3C7;
+    --accent: #B5502A;
+    --accent-ink: #FFFFFF;
+    --success: #3C6E45;
+    --muted: #6B6459;
+    --card-bg: #EFEBE0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  html { height: -webkit-fill-available; }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: -webkit-fill-available;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+  .card { width: 100%; max-width: 380px; margin: auto 0; }
+
+  .success-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--success);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p.lead { margin: 0 0 24px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+
+  .details {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px 16px;
+    margin-bottom: 20px;
+  }
+  .details-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .details-row:last-child { border-bottom: none; }
+  .details-row .label { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .details-row .value { text-align: right; }
+
+  #map {
+    width: 100%;
+    height: 220px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    margin-bottom: 8px;
+    background: #E5E1D6;
+  }
+  .coords {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 24px;
+  }
+
+  .button-link {
+    display: block;
+    text-align: center;
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 16px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="success-badge">&#10003;</div>
+    <h1>{{ 'Check-in saved' if flow == 'checkin' else 'Check-out saved' }}</h1>
+    <p class="lead">{{ 'This check-in has been logged.' if flow == 'checkin' else 'This landing has been logged.' }}</p>
+
+    <div class="details">
+      <div class="details-row"><span class="label">Pilot</span><span class="value">{{ name or "—" }}</span></div>
+      <div class="details-row"><span class="label">Bib Number</span><span class="value">{{ bib or "—" }}</span></div>
+      {% if flow != 'checkin' %}
+      <div class="details-row"><span class="label">Status</span><span class="value">{{ status or "—" }}</span></div>
+      {% if notes %}
+      <div class="details-row"><span class="label">Notes</span><span class="value">{{ notes }}</span></div>
+      {% endif %}
+      {% endif %}
+    </div>
+
+    {% if flow != 'checkin' %}
+      {% if lat is not none and lon is not none %}
+      <div id="map"></div>
+      <p class="coords">{{ "%.6f"|format(lat) }}, {{ "%.6f"|format(lon) }}{% if accuracy %} &middot; accuracy \u00b1{{ accuracy }}m{% endif %}</p>
+      {% else %}
+      <p class="coords">Location wasn't available for this record.</p>
+      {% endif %}
+    {% endif %}
+
+    <a class="button-link" href="{{ '/checkin' if flow == 'checkin' else '/' }}">{{ 'Check in another pilot' if flow == 'checkin' else 'Log another check-out' }}</a>
+  </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  {% if flow != 'checkin' and lat is not none and lon is not none %}
+  var lat = {{ lat }};
+  var lon = {{ lon }};
+  var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([lat, lon], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
+  L.marker([lat, lon]).addTo(map);
+  L.control.attribution({ prefix: false }).addAttribution('&copy; OpenStreetMap contributors').addTo(map);
+  {% endif %}
+</script>
+</body>
+</html>

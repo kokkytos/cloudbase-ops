@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pilot Locations</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --ink: #1C2B2D;
+    --paper: #F7F5F0;
+    --line: #D8D3C7;
+    --accent: #B5502A;
+    --accent-ink: #FFFFFF;
+    --muted: #6B6459;
+    --card-bg: #EFEBE0;
+    --c-active: #3C7DD9;
+    --c-transport: #C98A2B;
+    --c-injury: #B5342A;
+    --c-checked-out: #3C6E45;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+  }
+
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: max(12px, env(safe-area-inset-top)) 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  #topbar h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+  }
+  #legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  #refreshBtn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+  }
+  #refreshBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  #filterBar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #filterBar label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  #filterBar input[type="date"] {
+    font-size: 12px;
+    padding: 5px 6px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fff;
+    color: var(--ink);
+  }
+  #clearFilterBtn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  #clearFilterBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #lastUpdated {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  #map {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+
+  #emptyState {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 900;
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-size: 14px;
+    color: var(--muted);
+    text-align: center;
+  }
+  [hidden] { display: none !important; }
+
+  .popup-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .popup-row { font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+  .popup-time { font-size: 11px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <h1>Pilot Locations</h1>
+    <div id="legend">
+      <span class="legend-item"><span class="legend-dot" style="background: var(--c-active);"></span>Active/Airborne</span>
+      <span class="legend-item"><span class="legend-dot" style="background: var(--c-transport);"></span>Needs Transport</span>
+      <span class="legend-item"><span class="legend-dot" style="background: var(--c-injury);"></span>Injury</span>
+      <span class="legend-item"><span class="legend-dot" style="background: var(--c-checked-out);"></span>Checked Out</span>
+    </div>
+    <div id="filterBar">
+      <label>From <input type="date" id="startDate"></label>
+      <label>To <input type="date" id="endDate"></label>
+      <button id="clearFilterBtn" type="button" disabled>Clear</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="lastUpdated"></span>
+      <button id="refreshBtn" type="button">Refresh</button>
+    </div>
+  </div>
+
+  <div id="map"></div>
+  <p id="emptyState" hidden>No check-out locations yet.</p>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  var map = L.map('map', { zoomControl: true }).setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  var markersLayer = L.layerGroup().addTo(map);
+  var refreshBtn = document.getElementById('refreshBtn');
+  var lastUpdatedEl = document.getElementById('lastUpdated');
+  var emptyState = document.getElementById('emptyState');
+  var startDateInput = document.getElementById('startDate');
+  var endDateInput = document.getElementById('endDate');
+  var clearFilterBtn = document.getElementById('clearFilterBtn');
+
+  var STATUS_COLORS = {
+    'ACTIVE / AIRBORNE': getComputedStyle(document.documentElement).getPropertyValue('--c-active').trim(),
+    'NEEDS TRANSPORT': getComputedStyle(document.documentElement).getPropertyValue('--c-transport').trim(),
+    'INJURY': getComputedStyle(document.documentElement).getPropertyValue('--c-injury').trim(),
+    'CHECKED OUT': getComputedStyle(document.documentElement).getPropertyValue('--c-checked-out').trim()
+  };
+  var DEFAULT_COLOR = '#6B6459';
+
+  function colorForStatus(status) {
+    var key = (status || '').trim().toUpperCase();
+    return STATUS_COLORS[key] || DEFAULT_COLOR;
+  }
+
+  function formatTimestamp(raw) {
+    if (!raw) return '';
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleString();
+  }
+
+  function escapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+
+  function buildQuery() {
+    var params = new URLSearchParams();
+    if (startDateInput.value) params.set('start', startDateInput.value);
+    if (endDateInput.value) params.set('end', endDateInput.value);
+    return params.toString();
+  }
+
+  function loadLocations(shouldFit) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+
+    var qs = buildQuery();
+    fetch('/api/checkout-locations' + (qs ? '?' + qs : ''))
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            throw new Error(data.error || ('Request failed (' + res.status + ')'));
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        var locations = data.locations || [];
+        markersLayer.clearLayers();
+
+        if (locations.length === 0) {
+          emptyState.hidden = false;
+        } else {
+          emptyState.hidden = true;
+
+          var latLngs = [];
+          locations.forEach(function (loc) {
+            var lat = loc.latitude;
+            var lon = loc.longitude;
+            if (lat == null || lon == null) return;
+
+            var marker = L.circleMarker([lat, lon], {
+              radius: 9,
+              color: '#fff',
+              weight: 2,
+              fillColor: colorForStatus(loc.status),
+              fillOpacity: 0.95
+            });
+
+            var name = escapeHtml(loc.fullName || '(no name on file)');
+            var bib = loc.bibNumber ? ('Bib #' + escapeHtml(loc.bibNumber)) : '';
+            var status = escapeHtml(loc.status || '—');
+            var phone = loc.phone
+              ? ('<div class="popup-row"><a href="tel:' + escapeHtml(loc.phone) + '">' + escapeHtml(loc.phone) + '</a></div>')
+              : '';
+            var notes = loc.notes ? ('<div class="popup-row">' + escapeHtml(loc.notes) + '</div>') : '';
+            var time = escapeHtml(formatTimestamp(loc.timestamp));
+
+            marker.bindPopup(
+              '<div class="popup-name">' + name + (bib ? ' &middot; ' + bib : '') + '</div>' +
+              '<div class="popup-row">Status: ' + status + '</div>' +
+              phone +
+              notes +
+              '<div class="popup-time">' + time + '</div>'
+            );
+
+            marker.addTo(markersLayer);
+            latLngs.push([lat, lon]);
+          });
+
+          // Only re-fit the view on an explicit action (initial load, manual
+          // refresh, or a filter change) — not on the silent background
+          // auto-refresh, so we don't yank the map out from under someone
+          // who has panned/zoomed to look at something.
+          if (shouldFit && latLngs.length > 0) {
+            map.fitBounds(latLngs, { padding: [40, 60] });
+          }
+        }
+
+        lastUpdatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      })
+      .catch(function (err) {
+        lastUpdatedEl.textContent = 'Error: ' + err.message;
+      })
+      .finally(function () {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Refresh';
+        clearFilterBtn.disabled = !(startDateInput.value || endDateInput.value);
+      });
+  }
+
+  refreshBtn.addEventListener('click', function () { loadLocations(true); });
+
+  startDateInput.addEventListener('change', function () { loadLocations(true); });
+  endDateInput.addEventListener('change', function () { loadLocations(true); });
+
+  clearFilterBtn.addEventListener('click', function () {
+    startDateInput.value = '';
+    endDateInput.value = '';
+    loadLocations(true);
+  });
+
+  loadLocations(true);
+  setInterval(function () { loadLocations(false); }, 30000);
+</script>
+</body>
+</html>

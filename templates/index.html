@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>{{ 'Check-In Form' if flow == 'checkin' else 'Landing Log (Check-Outs) Form' }}</title>
+<style>
+  :root {
+    --ink: #1C2B2D;
+    --paper: #F7F5F0;
+    --line: #D8D3C7;
+    --accent: #B5502A;
+    --accent-ink: #FFFFFF;
+    --error: #A6321C;
+    --success: #3C6E45;
+    --muted: #6B6459;
+    --card-bg: #EFEBE0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  html { height: -webkit-fill-available; }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: -webkit-fill-available;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+  .card { width: 100%; max-width: 380px; margin: auto 0; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p.lead { margin: 0 0 12px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  p.hint { margin: 0 0 28px; color: var(--muted); font-size: 13px; line-height: 1.4; font-style: italic; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+  input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[readonly] { background: #F0EEE7; color: var(--muted); }
+  textarea {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    margin-bottom: 20px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 72px;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  textarea[readonly] { background: #F0EEE7; color: var(--muted); }
+  select {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    margin-bottom: 20px;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%236B6459' stroke-width='2' fill='none' fill-rule='evenodd'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  select[disabled] { background-color: #F0EEE7; color: var(--muted); }
+  button {
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 16px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .status { margin-top: 16px; font-size: 14px; line-height: 1.5; min-height: 20px; }
+  .status[data-state="loading"] { color: var(--muted); }
+  .status[data-state="error"] { color: var(--error); }
+  .status[data-state="success"] { color: var(--success); }
+  .fineprint { margin-top: 28px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  .participant-card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+  }
+  .participant-card .name {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .participant-card .bib {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .link-btn {
+    display: inline-block;
+    background: none;
+    border: none;
+    padding: 0;
+    width: auto;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    button { transition: opacity 0.15s ease; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{ 'Check-In Form' if flow == 'checkin' else 'Landing Log (Check-Outs) Form' }}</h1>
+    <p class="lead">
+      {% if flow == 'checkin' %}
+        Ground crew use this form to log a pilot's check-in before departure.
+      {% else %}
+        Ground crew use this form to log a pilot's landing, including participant identity, landing timestamp, and safety status.
+      {% endif %}
+    </p>
+    <p class="hint" id="leadText">{{ 'Enter your bib number to get started.' if entry_mode == 'bib' else 'Enter your check-in code to get started.' }}</p>
+
+    <form id="codeForm" novalidate {% if entry_mode == 'bib' %}hidden{% endif %}>
+      <label for="code">Check-In Code</label>
+      <input type="text" id="code" name="code" autocomplete="off" placeholder="e.g. GSTFT" style="text-transform: uppercase;">
+      <button type="submit" id="lookupBtn">Find my info</button>
+      <button type="button" class="link-btn" id="showBibFormBtn">{{ 'Check in using bib number instead' if flow == 'checkin' else 'Check out using bib number instead' }}</button>
+    </form>
+
+    <form id="bibForm" novalidate {% if entry_mode != 'bib' %}hidden{% endif %}>
+      <label for="bibNumber">Bib Number</label>
+      <input type="text" id="bibNumber" name="bibNumber" inputmode="numeric" autocomplete="off" placeholder="e.g. 245">
+      <button type="submit" id="bibLookupBtn">Find my info</button>
+      <button type="button" class="link-btn" id="showCodeFormBtn">{{ 'Check in using code instead' if flow == 'checkin' else 'Check out using code instead' }}</button>
+    </form>
+
+    <div class="participant-card" id="participantCard" hidden>
+      <div class="name" id="participantName"></div>
+      <div class="bib" id="participantBib"></div>
+      <button type="button" class="link-btn" id="changeCodeBtn">Not you? Start over</button>
+    </div>
+
+    <form id="checkoutForm" novalidate hidden>
+      {% if flow != 'checkin' %}
+      <label for="statusNotes">Status/Notes</label>
+      <select id="statusNotes" name="statusNotes" disabled>
+        <option value="" disabled selected>Loading options…</option>
+      </select>
+
+      <label for="notes">Notes</label>
+      <textarea id="notes" name="notes" placeholder="Optional additional details…"></textarea>
+      {% endif %}
+
+      <button type="submit" id="submitBtn">{{ 'Confirm check-in' if flow == 'checkin' else 'Share location & save' }}</button>
+    </form>
+
+    <div class="status" id="status" data-state="" role="status" aria-live="polite"></div>
+
+    <p class="fineprint">{{ "This will log your check-in with today's date and time." if flow == 'checkin' else "Your browser will ask permission to use your location. It's used only to save this check-out record." }}</p>
+  </div>
+
+<script>
+  var FLOW = {{ flow|tojson }};
+  var ENTRY_MODE = {{ entry_mode|tojson }};
+
+  var leadText = document.getElementById("leadText");
+
+  var codeForm = document.getElementById("codeForm");
+  var codeInput = document.getElementById("code");
+  var lookupBtn = document.getElementById("lookupBtn");
+  var showBibFormBtn = document.getElementById("showBibFormBtn");
+
+  var bibForm = document.getElementById("bibForm");
+  var bibNumberInput = document.getElementById("bibNumber");
+  var bibLookupBtn = document.getElementById("bibLookupBtn");
+  var showCodeFormBtn = document.getElementById("showCodeFormBtn");
+
+  var participantCard = document.getElementById("participantCard");
+  var participantNameEl = document.getElementById("participantName");
+  var participantBibEl = document.getElementById("participantBib");
+  var changeCodeBtn = document.getElementById("changeCodeBtn");
+
+  var checkoutForm = document.getElementById("checkoutForm");
+  var statusSelect = document.getElementById("statusNotes"); // null when FLOW === "checkin"
+  var notesInput = document.getElementById("notes");          // null when FLOW === "checkin"
+  var submitBtn = document.getElementById("submitBtn");
+
+  var statusEl = document.getElementById("status");
+
+  var currentParticipantId = null;
+  var currentParticipantName = "";
+  var currentParticipantBib = "";
+
+  function setStatus(state, message) {
+    statusEl.setAttribute("data-state", state);
+    statusEl.textContent = message;
+  }
+
+  function populateStatusSelect(choices) {
+    statusSelect.innerHTML = "";
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = "Select one…";
+    statusSelect.appendChild(placeholder);
+    choices.forEach(function (name) {
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      statusSelect.appendChild(opt);
+    });
+    statusSelect.disabled = false;
+  }
+
+  // Load the Status choices in the background — independent of code lookup.
+  // Not applicable for the check-in flow, which has no Status/Notes fields.
+  if (statusSelect) {
+    fetch("/api/status-options")
+      .then(function (res) { return res.json(); })
+      .then(function (data) { populateStatusSelect(data.choices || []); })
+      .catch(function () {
+        populateStatusSelect(["Needs Transport", "Injury", "Checked Out"]);
+      });
+  }
+
+  function resetToCodeEntry() {
+    currentParticipantId = null;
+    currentParticipantName = "";
+    currentParticipantBib = "";
+    checkoutForm.hidden = true;
+    participantCard.hidden = true;
+
+    if (ENTRY_MODE === "bib") {
+      codeForm.hidden = true;
+      bibForm.hidden = false;
+      leadText.textContent = "Enter your bib number to get started.";
+    } else {
+      bibForm.hidden = true;
+      codeForm.hidden = false;
+      leadText.textContent = "Enter your check-in code to get started.";
+    }
+
+    codeInput.value = "";
+    codeInput.disabled = false;
+    lookupBtn.disabled = false;
+    bibNumberInput.value = "";
+    bibNumberInput.disabled = false;
+    bibLookupBtn.disabled = false;
+    setStatus("", "");
+
+    if (ENTRY_MODE === "bib") {
+      bibNumberInput.focus();
+    } else {
+      codeInput.focus();
+    }
+  }
+
+  changeCodeBtn.addEventListener("click", resetToCodeEntry);
+
+  showBibFormBtn.addEventListener("click", function () {
+    codeForm.hidden = true;
+    bibForm.hidden = false;
+    leadText.textContent = "Enter your bib number to get started.";
+    setStatus("", "");
+    bibNumberInput.focus();
+  });
+
+  showCodeFormBtn.addEventListener("click", function () {
+    bibForm.hidden = true;
+    codeForm.hidden = false;
+    leadText.textContent = "Enter your check-in code to get started.";
+    setStatus("", "");
+    codeInput.focus();
+  });
+
+  function performLookup(params) {
+    params.flow = FLOW;
+
+    if (params.code) {
+      codeInput.value = params.code;
+    }
+    if (params.bib) {
+      bibNumberInput.value = params.bib;
+    }
+    codeInput.disabled = true;
+    lookupBtn.disabled = true;
+    bibNumberInput.disabled = true;
+    bibLookupBtn.disabled = true;
+    setStatus("loading", "Looking up your info\u2026");
+
+    fetch("/api/lookup-participant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params)
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) {
+          throw new Error(data.error || ("Request failed (" + res.status + ")"));
+        }
+        return data;
+      });
+    }).then(function (data) {
+      currentParticipantId = data.participantId;
+      currentParticipantName = data.fullName || "";
+      currentParticipantBib = data.bibNumber || "";
+      participantNameEl.textContent = data.fullName || "(no name on file)";
+      participantBibEl.textContent = data.bibNumber ? ("Bib #" + data.bibNumber) : "";
+
+      codeForm.hidden = true;
+      bibForm.hidden = true;
+      participantCard.hidden = false;
+      checkoutForm.hidden = false;
+      leadText.textContent = FLOW === "checkin"
+        ? "Confirm this is you, then log your check-in."
+        : "Confirm this is you, then log your check-out.";
+      setStatus("", "");
+    }).catch(function (err) {
+      codeInput.disabled = false;
+      lookupBtn.disabled = false;
+      bibNumberInput.disabled = false;
+      bibLookupBtn.disabled = false;
+      setStatus("error", err.message);
+    });
+  }
+
+  codeForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    var code = codeInput.value.trim().toUpperCase();
+    if (!code) {
+      setStatus("error", "Enter a code before continuing.");
+      codeInput.focus();
+      return;
+    }
+
+    performLookup({ code: code });
+  });
+
+  bibForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    var bibValue = bibNumberInput.value.trim();
+    if (!bibValue) {
+      setStatus("error", "Enter a bib number before continuing.");
+      bibNumberInput.focus();
+      return;
+    }
+
+    performLookup({ bib: bibValue });
+  });
+
+  // If the page was opened with ?code=XXXX or ?bib=XXXX (e.g. from a QR
+  // code on a wristband, or a manually-shared link), skip manual entry
+  // and look it up immediately. ?code= takes priority if both are present.
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var urlCode = params.get("code");
+    var urlBib = params.get("bib");
+    if (urlCode && urlCode.trim()) {
+      performLookup({ code: urlCode.trim().toUpperCase() });
+    } else if (urlBib && urlBib.trim()) {
+      performLookup({ bib: urlBib.trim() });
+    }
+  })();
+
+  function lockCheckoutForm(locked) {
+    submitBtn.disabled = locked;
+    if (statusSelect) statusSelect.disabled = locked;
+    if (notesInput) notesInput.readOnly = locked;
+  }
+
+  checkoutForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    if (!currentParticipantId) {
+      setStatus("error", "Look up a code first.");
+      return;
+    }
+
+    if (FLOW === "checkin") {
+      lockCheckoutForm(true);
+      setStatus("loading", "Saving check-in\u2026");
+
+      fetch("/api/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId: currentParticipantId })
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            throw new Error(data.error || ("Request failed (" + res.status + ")"));
+          }
+          return data;
+        });
+      }).then(function () {
+        var successParams = {
+          flow: FLOW,
+          name: currentParticipantName,
+          bib: currentParticipantBib
+        };
+        window.location.href = "/success?" + new URLSearchParams(successParams).toString();
+      }).catch(function (err) {
+        setStatus("error", "Couldn't save: " + err.message);
+        lockCheckoutForm(false);
+      });
+
+      return;
+    }
+
+    // ---- Check-out flow: requires status + a GPS fix ----
+    var statusNotes = statusSelect.value;
+    if (!statusNotes) {
+      setStatus("error", "Select a status before continuing.");
+      statusSelect.focus();
+      return;
+    }
+
+    var notes = notesInput.value.trim();
+
+    if (!("geolocation" in navigator)) {
+      setStatus("error", "This browser can't access location. Try a different browser or device.");
+      return;
+    }
+
+    lockCheckoutForm(true);
+    setStatus("loading", "Waiting for location permission…");
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        var lat = parseFloat(position.coords.latitude.toFixed(6));
+        var lon = parseFloat(position.coords.longitude.toFixed(6));
+        var acc = Math.round(position.coords.accuracy);
+
+        setStatus("loading", "Got a fix (\u00b1" + acc + "m). Saving\u2026");
+
+        fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            participantId: currentParticipantId,
+            statusNotes: statusNotes,
+            notes: notes,
+            latitude: lat,
+            longitude: lon
+          })
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok) {
+              throw new Error(data.error || ("Request failed (" + res.status + ")"));
+            }
+            return data;
+          });
+        }).then(function () {
+          var successParams = {
+            flow: FLOW,
+            name: currentParticipantName,
+            bib: currentParticipantBib,
+            status: statusNotes,
+            notes: notes,
+            lat: lat,
+            lon: lon,
+            acc: acc
+          };
+          window.location.href = "/success?" + new URLSearchParams(successParams).toString();
+        }).catch(function (err) {
+          setStatus("error", "Couldn't save: " + err.message);
+          lockCheckoutForm(false);
+        });
+      },
+      function (error) {
+        lockCheckoutForm(false);
+        var message = "Couldn't get your location. Please try again.";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "Location permission was denied. Allow location access in your browser settings and try again.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message = "Location is unavailable right now. Check that GPS is turned on and try again.";
+        } else if (error.code === error.TIMEOUT) {
+          message = "The location request timed out. Try again, ideally outdoors or near a window.";
+        }
+        setStatus("error", message);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+</script>
+</body>
+</html>
