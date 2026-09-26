@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pilots</title>
+<style>
+  :root {
+    --ink: #1C2B2D;
+    --paper: #F7F5F0;
+    --line: #D8D3C7;
+    --accent: #B5502A;
+    --muted: #6B6459;
+    --card-bg: #FFFFFF;
+    --error: #A6321C;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .count {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .error-banner {
+    background: #FBEAE6;
+    border: 1px solid var(--error);
+    color: var(--error);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  .empty-state {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 40px 0;
+    text-align: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+  }
+
+  .pilot-card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .bib-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .pilot-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    line-height: 1.3;
+  }
+  .check-in{
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 10px;
+    margin-bottom: 1px;
+    line-height: 1.0;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  .qr-img {
+    width: 140px;
+    height: 140px;
+    image-rendering: pixelated;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .qr-missing {
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--muted);
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+  }
+  .qr-link {
+    display: block;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-all;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .no-print { display: none !important; }
+    .pilot-card { break-inside: avoid; border-color: #999; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Pilots</h1>
+    <span class="count">{{ pilots|length }} pilot{{ '' if pilots|length == 1 else 's' }}</span>
+    <button class="no-print" onclick="window.print()" style="font-size:13px; font-weight:600; padding:6px 12px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer;">Print</button>
+  </header>
+
+  {% if error %}
+  <div class="error-banner">Couldn't load pilots: {{ error }}</div>
+  {% endif %}
+
+  {% if not error and pilots|length == 0 %}
+  <p class="empty-state">No participants found.</p>
+  {% endif %}
+
+  {% if pilots|length > 0 %}
+  <div class="grid">
+    {% for pilot in pilots %}
+    <div class="pilot-card">
+      <span class="bib-badge">{{ pilot.bib or '—' }}</span>
+      <div class="pilot-name">{{ pilot.name or '(no name on file)' }}</div>
+      {% if pilot.qr %}
+        {% if pilot.url %}
+        <a href="{{ pilot.url }}" target="_blank" rel="noopener">
+          <img class="qr-img" src="{{ pilot.qr }}" alt="Check-in/check-out QR code for {{ pilot.name or pilot.bib }}" loading="lazy">
+        </a>
+        {% else %}
+        <img class="qr-img" src="{{ pilot.qr }}" alt="Check-in/check-out QR code for {{ pilot.name or pilot.bib }}" loading="lazy">
+        {% endif %}
+      {% else %}
+      <div class="qr-missing">No code on file</div>
+      {% endif %}
+      <div class="check-in">Check in/out form</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</body>
+</html>

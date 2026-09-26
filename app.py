@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import requests
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, redirect, url_for
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +26,8 @@ LIVE_STATUS_FIELD_NAME = os.environ.get("LIVE_STATUS_FIELD_NAME", "Live Status")
 ALLOWED_LIVE_STATUS = os.environ.get("ALLOWED_LIVE_STATUS", "ACTIVE / AIRBORNE")
 CHECKOUT_TIMESTAMP_FIELD = os.environ.get("CHECKOUT_TIMESTAMP_FIELD", "Timestamp")
 PHONE_FIELD_NAME = os.environ.get("PHONE_FIELD_NAME", "Phone (from Participant)")
+CHECKINOUT_URL_FIELD_NAME = os.environ.get("CHECKINOUT_URL_FIELD_NAME", "Custom_CheckInOut_URL")
+QR_IMAGE_FIELD_NAME = os.environ.get("QR_IMAGE_FIELD_NAME", "QR_Code_Check-In_Out_Image")
 FALLBACK_STATUS_CHOICES = ["Needs Transport", "Injury", "Checked Out"]
 
 API_BASE = "https://api.airtable.com/v0"
@@ -69,6 +71,42 @@ def checkin_bib_entry():
     return render_template("index.html", entry_mode="bib", flow="checkin")
 
 
+@app.route("/go")
+def smart_entry():
+    """Single entry point for a QR code / shared link: looks up the
+    participant's current Live Status and forwards to the check-out form
+    if they're ACTIVE / AIRBORNE, or the check-in form otherwise.
+
+    Accepts ?code=XXXX or ?bib=XXXX (mirroring the other entry points).
+    If the participant can't be found (or Airtable can't be reached), it
+    defaults to the check-out form — the existing lookup there will show
+    the appropriate "not found" error rather than this route failing.
+    """
+    code = (request.args.get("code") or "").strip()
+    bib = (request.args.get("bib") or "").strip()
+
+    if not code and not bib:
+        return redirect(url_for("index"))
+
+    result = None
+    try:
+        if code:
+            result = find_participant_by_field(CODE_FIELD_NAME, code)
+        else:
+            result = find_participant_by_field(PARTICIPANT_MATCH_FIELD, bib)
+    except Exception:  # noqa: BLE001 - routing best-effort; let the target page handle errors
+        app.logger.exception("Smart entry lookup failed; defaulting to check-out")
+
+    flow = "checkin" if (result and not is_live_status_allowed(result.get("liveStatus"))) else "checkout"
+
+    if bib:
+        target = "checkin_bib_entry" if flow == "checkin" else "bib_entry"
+        return redirect(url_for(target, bib=bib))
+    else:
+        target = "checkin_index" if flow == "checkin" else "index"
+        return redirect(url_for(target, code=code))
+
+
 @app.route("/success")
 def success():
     def to_float(value):
@@ -93,6 +131,52 @@ def success():
 @app.route("/map")
 def map_view():
     return render_template("map.html")
+
+
+def _bib_sort_key(pilot):
+    bib = pilot.get("bib")
+    try:
+        return (0, int(bib))
+    except (TypeError, ValueError):
+        return (1, str(bib or ""))
+
+
+@app.route("/pilots")
+def pilots_view():
+    """Grid of every participant's Bib Number, Full Name, and their
+    pre-made Check-In/Check-Out QR code image (a ready-to-use image URL
+    already stored in Airtable, not generated here)."""
+    try:
+        records = fetch_all_records(
+            PARTICIPANTS_TABLE,
+            fields=[PARTICIPANT_MATCH_FIELD, FULL_NAME_FIELD_NAME, QR_IMAGE_FIELD_NAME, CHECKINOUT_URL_FIELD_NAME],
+        )
+    except requests.HTTPError as exc:
+        detail = str(exc)
+        if exc.response is not None:
+            try:
+                detail = exc.response.json().get("error", {}).get("message", detail)
+            except ValueError:
+                pass
+        app.logger.error("Airtable request failed: %s", detail)
+        return render_template("pilots.html", pilots=[], error=detail)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Unexpected error loading pilots")
+        return render_template("pilots.html", pilots=[], error=str(exc))
+
+    pilots = []
+    for rec in records:
+        f = rec.get("fields", {})
+        pilots.append({
+            "bib": f.get(PARTICIPANT_MATCH_FIELD),
+            "name": f.get(FULL_NAME_FIELD_NAME),
+            "qr": _first_or_value(f.get(QR_IMAGE_FIELD_NAME)),
+            "url": _first_or_value(f.get(CHECKINOUT_URL_FIELD_NAME)),
+        })
+
+    pilots.sort(key=_bib_sort_key)
+
+    return render_template("pilots.html", pilots=pilots, error=None)
 
 
 @app.route("/api/status-options")
