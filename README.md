@@ -32,7 +32,9 @@ exempt for testing). Deploy behind HTTPS before using this on other devices.
 | `/bib` | Check-out, entering by bib number |
 | `/checkin` | Check-in, entering by code |
 | `/checkin/bib` | Check-in, entering by bib number |
+| `/go?code=X` or `/go?bib=X` | Smart entry: looks up the participant's `Live Status` and forwards to the check-out or check-in form automatically |
 | `/map` | Live map of each pilot's most recent Check-Out location |
+| `/pilots` | Grid of every participant with Bib Number, Full Name, and a QR code for their `Custom_CheckInOut_URL` |
 
 The map's popups also show phone number, sourced from a `Phone (from
 Participant)` lookup field on `Check-Outs` (configurable via
@@ -55,6 +57,21 @@ Status/Notes choice, free-text Notes, and a GPS fix, and saves to
 **Check-in** requires the opposite — `Live Status` must **not** be
 `ACTIVE / AIRBORNE` — and only saves the participant link to `Check-Ins`.
 No location, status, or notes are collected for check-in.
+
+**`/pilots`** renders each participant's QR code server-side (via the
+`qrcode` package) and embeds it as a base64 PNG — no external QR image
+API or extra network round-trip needed at view time. Each QR encodes
+that participant's `Custom_CheckInOut_URL` value exactly as stored in
+Airtable, so it links straight to the same `/go?code=...` smart entry
+point used elsewhere. Includes a Print button (uses browser print
+styles) for producing physical cards/badges.
+
+**`/go`** is the route to put on a QR code or wristband: it checks the
+participant's current `Live Status` once, then redirects to whichever form
+(check-out or check-in) actually applies — so one link works both ways
+depending on where the pilot is in their flight. If the participant can't
+be found or Airtable is unreachable, it falls back to the check-out form,
+which will then show its own "not found" error as usual.
 
 ## Your token needs these scopes
 
